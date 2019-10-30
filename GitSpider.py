@@ -5,15 +5,22 @@ import scrapy
 
 
 def has_directory(url, directory='.git'):
-    full_url = '%s/%s/' % (url, directory)
+    return has_file(url, directory + '/')
 
-    r = requests.get('%s' % full_url)
+
+def has_file(url, file):
+    full_url = '%s/%s' % (url, file)
+
+    r = requests.get('%s' % full_url, allow_redirects=False, timeout=2)
 
     valid_codes = [
         200
     ]
 
-    return r.status_code in valid_codes, full_url
+    if r.status_code not in valid_codes:
+        return False, full_url
+
+    return r.text.startswith('ref:'), full_url
 
 
 def get_ext(path):
@@ -27,6 +34,7 @@ def get_ext(path):
 
 class GitSpider(scrapy.Spider):
     name = 'gitspider'
+    counter = 0
 
     excluded_extensions = [
         'png',
@@ -39,6 +47,7 @@ class GitSpider(scrapy.Spider):
         'pdf',
         'txt',
         'doc',
+        'docx'
         'docx'
     ]
 
@@ -61,11 +70,16 @@ class GitSpider(scrapy.Spider):
 
     def parse(self, response):
 
-        print('Response URL: %s' % (response.url))
+        #print('Response URL: %s' % response.url)
+
+        self.counter += 1
+
+        if self.counter % 10 == 0:
+            print('[%d]: %s' % (self.counter, response.url))
 
         resp_urlp = urlparse(response.url)
 
-        hd, git_path = has_directory('%s://%s' % (resp_urlp.scheme, resp_urlp.netloc))
+        hd, git_path = has_file('%s://%s' % (resp_urlp.scheme, resp_urlp.netloc), file='.git/HEAD')
 
         if hd:
             print('Has .git directory: %s' % git_path)
@@ -84,7 +98,7 @@ class GitSpider(scrapy.Spider):
             if urlp.scheme not in self.allowed_schemes:
                 continue
 
-            #if len(urlp.path) != 0 and get_ext(urlp.path) in self.excluded_extensions:
+            # if len(urlp.path) != 0 and get_ext(urlp.path) in self.excluded_extensions:
             #    continue
 
             yield scrapy.Request(url, callback=self.parse)
